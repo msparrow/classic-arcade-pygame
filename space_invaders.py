@@ -11,7 +11,7 @@ import random
 
 # Import shared modules and constants.
 from config import BLACK, WHITE, GREEN, RED
-from utils import draw_text, pause_menu, settings_menu
+from utils import draw_text, pause_menu, settings_menu, create_explosion
 import scores
 
 # --- Initialization ---
@@ -119,6 +119,25 @@ def main_menu(screen, clock, font, small_font):
         pygame.display.flip()
         clock.tick(15)
 
+def create_starfield(num_stars):
+    """Creates a list of stars for the background."""
+    stars = []
+    for _ in range(num_stars):
+        x = random.randint(0, SCREEN_WIDTH)
+        y = random.randint(0, SCREEN_HEIGHT)
+        speed = random.uniform(0.5, 2)
+        stars.append({'x': x, 'y': y, 'speed': speed})
+    return stars
+
+def draw_starfield(screen, stars):
+    """Draws and updates the starfield."""
+    for star in stars:
+        star['y'] += star['speed']
+        if star['y'] > SCREEN_HEIGHT:
+            star['y'] = 0
+            star['x'] = random.randint(0, SCREEN_WIDTH)
+        pygame.draw.circle(screen, (200, 200, 200), (int(star['x']), int(star['y'])), 1)
+
 def game_loop(screen, clock, font, level, total_score=0):
     pygame.display.set_caption(f"Space Invaders - Level {level}")
     font = pygame.font.Font(None, 36)
@@ -132,6 +151,9 @@ def game_loop(screen, clock, font, level, total_score=0):
     player = pygame.Rect(SCREEN_WIDTH / 2 - PLAYER_SIZE / 2, SCREEN_HEIGHT - 70, PLAYER_SIZE, PLAYER_SIZE)
     player_bullets, aliens, alien_bullets = [], create_aliens(), []
     alien_direction, score, lives = 1, total_score, 3
+    particles = []
+    stars = create_starfield(100)
+    alien_animation_timer = 0
 
     # Main game loop.
     while True:
@@ -177,6 +199,8 @@ def game_loop(screen, clock, font, level, total_score=0):
             alien_direction *= -1
             for alien in aliens:
                 alien.y += current_alien_speed_y
+        
+        alien_animation_timer += 1
 
         # Alien firing.
         if random.randint(1, current_alien_fire_rate) == 1 and aliens:
@@ -191,6 +215,7 @@ def game_loop(screen, clock, font, level, total_score=0):
                     player_bullets.remove(bullet)
                     aliens.remove(alien)
                     score += 100
+                    create_explosion(particles, alien.centerx, alien.centery, RED)
                     break
 
         # Collision detection: alien bullets and player.
@@ -198,6 +223,7 @@ def game_loop(screen, clock, font, level, total_score=0):
             if bullet.colliderect(player):
                 alien_bullets.remove(bullet)
                 lives -= 1
+                create_explosion(particles, player.centerx, player.centery, GREEN)
                 if lives <= 0:
                     return score, 'game_over'
 
@@ -210,26 +236,38 @@ def game_loop(screen, clock, font, level, total_score=0):
             if alien.bottom >= player.top:
                 return score, 'game_over'
 
+        # Update particles
+        for p in particles:
+            p.update()
+        particles = [p for p in particles if p.life > 0]
+
         # Drawing everything.
+        screen.fill(BLACK)
+        draw_starfield(screen, stars)
+        
         # Draw detailed player
-        # Main body
-        pygame.draw.rect(screen, GREEN, player)
-        # Cockpit
-        pygame.draw.rect(screen, WHITE, (player.centerx - PLAYER_SIZE // 4, player.top, PLAYER_SIZE // 2, PLAYER_SIZE // 2))
-        # Cannons
-        pygame.draw.rect(screen, WHITE, (player.left, player.centery, 5, 10))
-        pygame.draw.rect(screen, WHITE, (player.right - 5, player.centery, 5, 10))
+        pygame.draw.rect(screen, GREEN, player, border_radius=5)
+        pygame.draw.rect(screen, WHITE, (player.centerx - 5, player.top + 10, 10, 10))
 
         # Draw detailed aliens
         for alien in aliens:
-            # Main body
-            pygame.draw.rect(screen, RED, alien)
-            # Eyes
-            pygame.draw.circle(screen, WHITE, (alien.centerx - alien.width // 4, alien.centery - alien.height // 4), 3)
-            pygame.draw.circle(screen, WHITE, (alien.centerx + alien.width // 4, alien.centery - alien.height // 4), 3)
-            # Legs/Tentacles
-            pygame.draw.line(screen, RED, alien.midbottom, (alien.midbottom[0] - alien.width // 3, alien.midbottom[1] + alien.height // 2), 2)
-            pygame.draw.line(screen, RED, alien.midbottom, (alien.midbottom[0] + alien.width // 3, alien.midbottom[1] + alien.height // 2), 2)
+            # Simple animation
+            offset_y = 0
+            if (alien_animation_timer // 30) % 2 == 0:
+                offset_y = 5
+            
+            color = (200, 50, 50)
+            pygame.draw.rect(screen, color, alien.move(0, offset_y), border_radius=5)
+            pygame.draw.circle(screen, WHITE, (alien.centerx - 10, alien.centery - 5 + offset_y), 4)
+            pygame.draw.circle(screen, WHITE, (alien.centerx + 10, alien.centery - 5 + offset_y), 4)
+
+        for bullet in player_bullets:
+            pygame.draw.rect(screen, (100, 255, 100), bullet)
+        for bullet in alien_bullets:
+            pygame.draw.rect(screen, (255, 100, 100), bullet)
+
+        for p in particles:
+            p.draw(screen)
 
         # Draw score and lives.
         draw_text(f"Score: {score}", font, WHITE, screen, 100, 20)

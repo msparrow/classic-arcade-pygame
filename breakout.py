@@ -11,7 +11,7 @@ import random
 
 # Import shared modules and constants.
 from config import BLACK, WHITE, GREEN, BLUE
-from utils import draw_text, pause_menu, settings_menu
+from utils import draw_text, pause_menu, settings_menu, Particle, create_explosion
 import scores
 
 # --- Initialization ---
@@ -179,6 +179,21 @@ def main_menu(screen, clock, font, small_font):
         pygame.display.flip()
         clock.tick(15)
 
+def draw_dynamic_background(screen, level):
+    """Draws a dynamic, level-themed background."""
+    colors = [
+        (10, 10, 30), (30, 10, 10), (10, 30, 10), (10, 10, 10), (30, 30, 10)
+    ]
+    base_color = colors[level - 1]
+    screen.fill(base_color)
+    # Add some subtle animated stars or particles
+    for _ in range(10):
+        x = random.randint(0, SCREEN_WIDTH)
+        y = random.randint(0, SCREEN_HEIGHT)
+        size = random.randint(1, 2)
+        color = (min(255, base_color[0] + 50), min(255, base_color[1] + 50), min(255, base_color[2] + 50))
+        pygame.draw.circle(screen, color, (x, y), size)
+
 def game_loop(screen, clock, font, level, total_score=0):
     """
     Runs the main game loop for Breakout.
@@ -205,6 +220,7 @@ def game_loop(screen, clock, font, level, total_score=0):
     
     bricks = create_bricks(level)
     power_ups = []
+    particles = []
     score = total_score # Start with cumulative score
     lives = 3 # Lives reset per level, or carry over? Let's carry over for now.
 
@@ -250,6 +266,7 @@ def game_loop(screen, clock, font, level, total_score=0):
                 # Change ball direction based on where it hits the paddle.
                 offset = (ball.centerx - paddle.centerx) / (paddle.width / 2)
                 ball_speeds[i][0] = offset * current_ball_speed # Use current_ball_speed here
+                create_explosion(particles, ball.centerx, ball.centery, PADDLE_COLOR, 10)
 
             # Brick collision.
             for brick_info in bricks[:]:
@@ -257,6 +274,7 @@ def game_loop(screen, clock, font, level, total_score=0):
                     bricks.remove(brick_info)
                     ball_speeds[i][1] *= -1
                     score += 10
+                    create_explosion(particles, brick_info['rect'].centerx, brick_info['rect'].centery, brick_info['color'], 30)
                     # Chance to spawn a power-up.
                     if random.random() < POWER_UP_CHANCE:
                         power_up_type = POWER_UP_TYPES.get(brick_info['color'])
@@ -268,12 +286,18 @@ def game_loop(screen, clock, font, level, total_score=0):
             if ball.top >= SCREEN_HEIGHT:
                 balls.pop(i)
                 ball_speeds.pop(i)
+                break
 
         # Check for game over.
         if not balls:
             lives -= 1
             if lives <= 0:
                 return score, 'game_over' # Game over for this attempt
+            else:
+                # Relaunch a single ball
+                balls.append(pygame.Rect(paddle.centerx - BALL_RADIUS, paddle.y - BALL_RADIUS * 2, BALL_RADIUS * 2, BALL_RADIUS * 2))
+                ball_speeds.append([current_ball_speed, -current_ball_speed])
+
 
         # Power-up handling.
         for power_up in power_ups[:]:
@@ -307,31 +331,39 @@ def game_loop(screen, clock, font, level, total_score=0):
             paddle.width = PADDLE_WIDTH
             widen_power_up_active = False
 
+        # Update particles
+        for p in particles:
+            p.update()
+        particles = [p for p in particles if p.life > 0]
+        for ball in balls:
+            particles.append(Particle(ball.centerx, ball.centery, (200, 200, 0), 4, 10, 0, 0))
+
         # Check for win condition.
         if not bricks:
             return score, 'next_level' # Level complete
 
         # --- Drawing ---
-        screen.fill(BLACK)
+        draw_dynamic_background(screen, level)
         # Draw detailed paddle
-        pygame.draw.rect(screen, PADDLE_COLOR, paddle) # Main paddle body
-        pygame.draw.rect(screen, (PADDLE_COLOR[0] + 30, PADDLE_COLOR[1] + 30, PADDLE_COLOR[2] + 30), 
-                         (paddle.x, paddle.y, paddle.width, 5)) # Top highlight
-        pygame.draw.rect(screen, (PADDLE_COLOR[0] - 30, PADDLE_COLOR[1] - 30, PADDLE_COLOR[2] - 30), 
-                         (paddle.x, paddle.y + paddle.height - 5, paddle.width, 5)) # Bottom shadow
-
+        pygame.draw.rect(screen, PADDLE_COLOR, paddle, border_radius=5) # Main paddle body
+        pygame.draw.rect(screen, tuple(min(255, c + 30) for c in PADDLE_COLOR), 
+                         (paddle.x, paddle.y, paddle.width, 5), border_radius=5) # Top highlight
+        
         # Draw detailed balls
         for ball in balls:
             pygame.draw.ellipse(screen, BALL_COLOR, ball) # Main ball body
             pygame.draw.circle(screen, WHITE, (ball.centerx - ball.width // 4, ball.centery - ball.height // 4), 
                                ball.width // 4) # Highlight
-            pygame.draw.circle(screen, (BALL_COLOR[0] - 50, BALL_COLOR[1] - 50, BALL_COLOR[2] - 50), 
-                               (ball.centerx + ball.width // 4, ball.centery + ball.height // 4), 
-                               ball.width // 6) # Shadow
+        
         for brick_info in bricks:
-            pygame.draw.rect(screen, brick_info['color'], brick_info['rect'])
+            pygame.draw.rect(screen, brick_info['color'], brick_info['rect'], border_radius=3)
+            pygame.draw.rect(screen, tuple(min(255, c + 50) for c in brick_info['color']), brick_info['rect'].inflate(-6, -6))
+
         for power_up in power_ups:
             power_up.draw(screen)
+
+        for p in particles:
+            p.draw(screen)
 
         # Draw UI.
         draw_text(f"Score: {score}", font, WHITE, screen, 80, 20)

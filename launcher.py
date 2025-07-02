@@ -29,6 +29,8 @@ import minesweeper
 import pacman
 import frogger
 import galaga
+import cyber_ninja
+import beat_em_up
 
 # --- Initialization ---
 # Initialize all imported Pygame modules.
@@ -46,7 +48,9 @@ TITLE_FONT_SIZE = 60
 # This makes it easy to add or remove games from the launcher.
 GAMES = {
     "Asteroids": asteroids,
+    "Beat 'em Up": beat_em_up,
     "Breakout": breakout,
+    "Cyber-Ninja Showdown": cyber_ninja,
     "Minesweeper": minesweeper,
     "Pac-Man": pacman,
     "Pong": pong,

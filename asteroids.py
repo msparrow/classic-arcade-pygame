@@ -12,7 +12,7 @@ import math
 
 # Import shared modules and constants.
 from config import BLACK, WHITE, BLUE
-from utils import draw_text, pause_menu, settings_menu
+from utils import draw_text, pause_menu, settings_menu, Particle, create_explosion
 import scores
 
 # --- Initialization ---
@@ -29,6 +29,25 @@ PLAYER_SIZE, PLAYER_ROTATION_SPEED, PLAYER_ACCELERATION, PLAYER_FRICTION = 20, 5
 BULLET_SPEED, BULLET_LIFESPAN = 10, 40
 # Asteroid properties.
 ASTEROID_SPEED, ASTEROID_INITIAL_COUNT = 2, 5
+
+def create_starfield(num_stars):
+    """Creates a list of stars for the background."""
+    stars = []
+    for _ in range(num_stars):
+        x = random.randint(0, SCREEN_WIDTH)
+        y = random.randint(0, SCREEN_HEIGHT)
+        speed = random.uniform(0.1, 1)
+        stars.append({'x': x, 'y': y, 'speed': speed})
+    return stars
+
+def draw_starfield(screen, stars):
+    """Draws and updates the starfield."""
+    for star in stars:
+        star['y'] += star['speed']
+        if star['y'] > SCREEN_HEIGHT:
+            star['y'] = 0
+            star['x'] = random.randint(0, SCREEN_WIDTH)
+        pygame.draw.circle(screen, (100, 100, 100), (int(star['x']), int(star['y'])), 1)
 
 class Player:
     """
@@ -85,9 +104,9 @@ class Player:
             (self.pos.x + PLAYER_SIZE * math.cos(angle_rad + 2.5) / 2, self.pos.y - PLAYER_SIZE * math.sin(angle_rad + 2.5) / 2),
             (self.pos.x + PLAYER_SIZE * math.cos(angle_rad - 2.5) / 2, self.pos.y - PLAYER_SIZE * math.sin(angle_rad - 2.5) / 2)
         ]
-        pygame.draw.polygon(surface, WHITE, points, 1)
+        pygame.draw.polygon(surface, WHITE, points, 2)
         if self.shield_active:
-            pygame.draw.circle(surface, BLUE, (int(self.pos.x), int(self.pos.y)), PLAYER_SIZE * 1.5, 1)
+            pygame.draw.circle(surface, BLUE, (int(self.pos.x), int(self.pos.y)), PLAYER_SIZE * 1.5, 2)
 
 class Bullet:
     """
@@ -119,7 +138,7 @@ class Bullet:
         Args:
             surface (pygame.Surface): The surface to draw on.
         """
-        pygame.draw.circle(surface, WHITE, (int(self.pos.x), int(self.pos.y)), 2)
+        pygame.draw.circle(surface, (255, 200, 200), (int(self.pos.x), int(self.pos.y)), 3)
 
 class Asteroid:
     """
@@ -137,12 +156,20 @@ class Asteroid:
         self.vel = pygame.Vector2(random.uniform(-1, 1), random.uniform(-1, 1)).normalize() * ASTEROID_SPEED
         self.size = size
         self.radius = self.size * 15
+        self.angle = 0
+        self.rotation_speed = random.uniform(-2, 2)
+        self.shape = []
+        for _ in range(10):
+            a = random.uniform(0, 2 * math.pi)
+            r = self.radius * random.uniform(0.8, 1.2)
+            self.shape.append((r * math.cos(a), r * math.sin(a)))
 
     def update(self):
         """
         Updates the asteroid's position and handles screen wrapping.
         """
         self.pos += self.vel
+        self.angle += self.rotation_speed
         # Screen wrapping.
         if self.pos.x > SCREEN_WIDTH + self.radius: self.pos.x = -self.radius
         if self.pos.x < -self.radius: self.pos.x = SCREEN_WIDTH + self.radius
@@ -156,7 +183,13 @@ class Asteroid:
         Args:
             surface (pygame.Surface): The surface to draw on.
         """
-        pygame.draw.circle(surface, WHITE, (int(self.pos.x), int(self.pos.y)), self.radius, 1)
+        points = []
+        for x, y in self.shape:
+            angle_rad = math.radians(self.angle)
+            rotated_x = x * math.cos(angle_rad) - y * math.sin(angle_rad)
+            rotated_y = x * math.sin(angle_rad) + y * math.cos(angle_rad)
+            points.append((self.pos.x + rotated_x, self.pos.y + rotated_y))
+        pygame.draw.polygon(surface, (200, 200, 200), points, 2)
 
 def main_menu(screen, clock, font, small_font):
     """
@@ -246,6 +279,8 @@ def game_loop(screen, clock, font):
     player = Player()
     bullets, asteroids = [], [Asteroid() for _ in range(ASTEROID_INITIAL_COUNT)]
     score, game_over = 0, False
+    particles = []
+    stars = create_starfield(100)
 
     # Main game loop.
     while True:
@@ -270,7 +305,14 @@ def game_loop(screen, clock, font):
             keys = pygame.key.get_pressed()
             if keys[pygame.K_LEFT]: player.angle += PLAYER_ROTATION_SPEED
             if keys[pygame.K_RIGHT]: player.angle -= PLAYER_ROTATION_SPEED
-            if keys[pygame.K_UP]: player.vel += pygame.Vector2(PLAYER_ACCELERATION, 0).rotate(-player.angle)
+            if keys[pygame.K_UP]:
+                player.vel += pygame.Vector2(PLAYER_ACCELERATION, 0).rotate(-player.angle)
+                # Thruster particles
+                angle_rad = math.radians(player.angle)
+                dx = -math.cos(angle_rad) * 2
+                dy = math.sin(angle_rad) * 2
+                for _ in range(2):
+                    particles.append(Particle(player.pos.x, player.pos.y, (255, 100, 0), 3, 20, dx, dy))
 
             # Update game objects.
             player.update()
@@ -286,6 +328,7 @@ def game_loop(screen, clock, font):
                         bullets.remove(b)
                         asteroids.remove(a)
                         score += 10 * (4 - a.size)
+                        create_explosion(particles, a.pos.x, a.pos.y, (200, 200, 200))
                         # Split asteroid into smaller pieces.
                         if a.size > 1:
                             asteroids.extend([Asteroid(a.pos, a.size - 1), Asteroid(a.pos, a.size - 1)])
@@ -296,18 +339,27 @@ def game_loop(screen, clock, font):
                 if player.pos.distance_to(a.pos) < a.radius + PLAYER_SIZE / 2:
                     if not player.shield_active:
                         game_over = True
+                        create_explosion(particles, player.pos.x, player.pos.y, (255, 0, 0), 50)
                     else:
                         # If shield is active, destroy the asteroid.
                         asteroids.remove(a)
                         score += 10 * (4 - a.size)
+                        create_explosion(particles, a.pos.x, a.pos.y, (0, 200, 255))
                         if a.size > 1:
                             asteroids.extend([Asteroid(a.pos, a.size - 1), Asteroid(a.pos, a.size - 1)])
 
+        # Update particles
+        for p in particles:
+            p.update()
+        particles = [p for p in particles if p.life > 0]
+
         # --- Drawing ---
         screen.fill(BLACK)
+        draw_starfield(screen, stars)
         player.draw(screen)
         for b in bullets: b.draw(screen)
         for a in asteroids: a.draw(screen)
+        for p in particles: p.draw(screen)
 
         # Draw score.
         score_text = font.render(f"Score: {score}", True, WHITE)
@@ -333,6 +385,7 @@ def game_loop(screen, clock, font):
 
         pygame.display.flip()
         clock.tick(60)
+
 
 def run_game(screen, clock):
     """

@@ -8,10 +8,9 @@ This script contains the game logic for Pac-Man, including player and ghost move
 import pygame
 import sys
 import random
-
-# Import shared modules and constants.
+import math
 from config import BLACK, WHITE, YELLOW, RED, GREEN, GRAY
-from utils import draw_text, pause_menu, settings_menu
+from utils import draw_text, pause_menu, settings_menu, Particle, create_explosion
 import scores
 
 # --- Constants ---
@@ -81,6 +80,7 @@ class Ghost:
         # Load the ghost sprite.
         self.sprite = pygame.image.load(f'assets/sprites/{color}').convert_alpha()
         self.sprite = pygame.transform.scale(self.sprite, (CELL_SIZE, CELL_SIZE))
+        self.animation_timer = 0
 
     def move(self, maze, player_pos):
         """
@@ -142,6 +142,8 @@ class Ghost:
             self.x -= 1
         elif self.direction == 'RIGHT':
             self.x += 1
+        
+        self.animation_timer += 1
 
     def draw(self, screen):
         """
@@ -150,7 +152,9 @@ class Ghost:
         Args:
             screen (pygame.Surface): The screen to draw on.
         """
-        screen.blit(self.sprite, (self.x * CELL_SIZE, self.y * CELL_SIZE))
+        offset_y = math.sin(self.animation_timer * 0.2) * 3
+        self.sprite.set_alpha(180)
+        screen.blit(self.sprite, (self.x * CELL_SIZE, self.y * CELL_SIZE + offset_y))
 
 class Player:
     """
@@ -169,6 +173,7 @@ class Player:
         # Load the player sprite.
         self.sprite = pygame.image.load('assets/sprites/pacman.png').convert_alpha()
         self.sprite = pygame.transform.scale(self.sprite, (CELL_SIZE, CELL_SIZE))
+        self.animation_timer = 0
 
     def move(self, dx, dy, maze):
         """
@@ -183,6 +188,8 @@ class Player:
         # Check for wall collisions.
         if 0 <= new_x < MAZE_WIDTH and 0 <= new_y < MAZE_HEIGHT and maze[new_y][new_x] != '#':
             self.x, self.y = new_x, new_y
+        
+        self.animation_timer += 1
 
     def draw(self, screen):
         """
@@ -191,7 +198,9 @@ class Player:
         Args:
             screen (pygame.Surface): The screen to draw on.
         """
-        screen.blit(self.sprite, (self.x * CELL_SIZE, self.y * CELL_SIZE))
+        angle = (self.animation_timer * 10) % 360
+        rotated_sprite = pygame.transform.rotate(self.sprite, angle)
+        screen.blit(rotated_sprite, (self.x * CELL_SIZE, self.y * CELL_SIZE))
 
 def main_menu(screen, clock, font, small_font):
     """
@@ -306,6 +315,7 @@ def game_loop(screen, clock, font):
     score = 0
     lives = 3
     game_over = False
+    particles = []
 
     # Timer for controlling movement speed.
     move_timer = 0
@@ -351,16 +361,19 @@ def game_loop(screen, clock, font):
             if (player.x, player.y) in pellets:
                 pellets.remove((player.x, player.y))
                 score += 10
+                create_explosion(particles, player.x * CELL_SIZE + CELL_SIZE // 2, player.y * CELL_SIZE + CELL_SIZE // 2, (255, 255, 255), 5)
 
             # Check for power pellet collision.
             if (player.x, player.y) in power_pellets:
                 power_pellets.remove((player.x, player.y))
                 score += 50
+                create_explosion(particles, player.x * CELL_SIZE + CELL_SIZE // 2, player.y * CELL_SIZE + CELL_SIZE // 2, (0, 255, 0), 20)
 
             # Check for ghost collision.
             for ghost in ghosts:
                 if player.x == ghost.x and player.y == ghost.y:
                     lives -= 1
+                    create_explosion(particles, player.x * CELL_SIZE + CELL_SIZE // 2, player.y * CELL_SIZE + CELL_SIZE // 2, (255, 0, 0), 30)
                     if lives <= 0:
                         game_over = True
                     else:
@@ -372,6 +385,12 @@ def game_loop(screen, clock, font):
             # Check for win condition.
             if not pellets and not power_pellets:
                 game_over = True
+
+        # Update particles
+        for p in particles:
+            p.update()
+        particles = [p for p in particles if p.life > 0]
+        particles.append(Particle(player.x * CELL_SIZE + CELL_SIZE // 2, player.y * CELL_SIZE + CELL_SIZE // 2, YELLOW, 3, 10, 0, 0))
 
         # --- Drawing ---
         screen.fill(BLACK)
@@ -392,6 +411,9 @@ def game_loop(screen, clock, font):
         player.draw(screen)
         for ghost in ghosts:
             ghost.draw(screen)
+        
+        for p in particles:
+            p.draw(screen)
 
         # Draw the UI (score and lives).
         draw_text(f"Score: {score}", font, WHITE, screen, 60, 10)
@@ -421,6 +443,7 @@ def game_loop(screen, clock, font):
         clock.tick(60)
 
     return score
+
 
 def end_screen(screen, clock, font, message):
     """

@@ -12,7 +12,7 @@ import random
 
 # Import shared modules and constants.
 from config import BLACK, WHITE, GREEN, RED, GRAY, DEFAULT_MUSIC_VOLUME
-from utils import draw_text, pause_menu, settings_menu
+from utils import draw_text, pause_menu, settings_menu, Particle, create_explosion
 import scores
 
 # --- Initialization ---
@@ -42,6 +42,13 @@ GRID_HEIGHT = SCREEN_HEIGHT // CELL_SIZE
 START_MENU = 0
 PLAYING = 1
 GAME_OVER = 2
+
+def draw_grid_background(screen):
+    """Draws a grid background."""
+    for x in range(0, SCREEN_WIDTH, CELL_SIZE):
+        pygame.draw.line(screen, (20, 20, 20), (x, 0), (x, SCREEN_HEIGHT))
+    for y in range(0, SCREEN_HEIGHT, CELL_SIZE):
+        pygame.draw.line(screen, (20, 20, 20), (0, y), (SCREEN_WIDTH, y))
 
 def start_menu(screen, clock, font, small_font, current_difficulty):
     """
@@ -165,7 +172,7 @@ def game_over_menu(screen, clock, font, small_font, score):
     while True:
         screen.fill(BACKGROUND_COLOR)
         draw_text("Game Over", font, HIGHLIGHT_COLOR, screen, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 4)
-        draw_text(f"Final Score: {score}", small_font, TEXT_COLOR, screen, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 4 + 60)
+        draw_text(f"Final Score: {score}", small_font, TEXT_COLOR, screen, SCREEN_HEIGHT / 2, SCREEN_HEIGHT / 4 + 60)
 
         mx, my = pygame.mouse.get_pos()
 
@@ -223,6 +230,8 @@ def game_loop(screen, clock, small_font, game_speed):
     direction = 'RIGHT'
     change_to = direction
     score = 0
+    particles = []
+    grow_animation = 0
 
     # Initialize food position.
     food_pos = [random.randrange(1, GRID_WIDTH), random.randrange(1, GRID_HEIGHT)]
@@ -258,6 +267,8 @@ def game_loop(screen, clock, small_font, game_speed):
         # Check for food collision.
         if snake_pos[0] == food_pos[0] and snake_pos[1] == food_pos[1]:
             score += 1
+            grow_animation = 5
+            create_explosion(particles, food_pos[0] * CELL_SIZE + CELL_SIZE // 2, food_pos[1] * CELL_SIZE + CELL_SIZE // 2, RED)
             # Generate new food.
             food_pos = [random.randrange(1, GRID_WIDTH), random.randrange(1, GRID_HEIGHT)]
         else:
@@ -266,11 +277,28 @@ def game_loop(screen, clock, small_font, game_speed):
 
         # --- Drawing ---
         screen.fill(BLACK)
+        draw_grid_background(screen)
+        
         # Draw the snake.
-        for pos in snake_body:
-            pygame.draw.rect(screen, GREEN, pygame.Rect(pos[0] * CELL_SIZE, pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+        for i, pos in enumerate(snake_body):
+            size = CELL_SIZE
+            if i == 0 and grow_animation > 0:
+                size = CELL_SIZE + grow_animation * 2
+                grow_animation -= 1
+            
+            color_val = 255 - min(255, i * 10)
+            color = (0, color_val, 0)
+            pygame.draw.rect(screen, color, pygame.Rect(pos[0] * CELL_SIZE, pos[1] * CELL_SIZE, size, size), border_radius=5)
+        
         # Draw the food.
-        pygame.draw.rect(screen, RED, pygame.Rect(food_pos[0] * CELL_SIZE, food_pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+        pygame.draw.ellipse(screen, RED, pygame.Rect(food_pos[0] * CELL_SIZE, food_pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+
+        # Update and draw particles
+        for p in particles:
+            p.update()
+        particles = [p for p in particles if p.life > 0]
+        for p in particles:
+            p.draw(screen)
 
         # --- Game Over Conditions ---
         # Check for collision with the screen boundaries.
@@ -286,6 +314,7 @@ def game_loop(screen, clock, small_font, game_speed):
 
         pygame.display.update()
         clock.tick(game_speed)
+
 
 def run_game(screen, clock):
     """

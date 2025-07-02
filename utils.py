@@ -6,6 +6,52 @@ This module contains functions that are used by multiple games, such as drawing 
 """
 
 import pygame
+import random
+
+# --- Particle System ---
+class Particle:
+    def __init__(self, x, y, color, size, life, dx, dy):
+        self.x = x
+        self.y = y
+        self.color = color
+        self.size = size
+        self.life = life
+        self.dx = dx
+        self.dy = dy
+
+    def update(self):
+        self.x += self.dx
+        self.y += self.dy
+        self.life -= 1
+        if self.size > 0:
+            self.size -= 0.1
+
+    def draw(self, screen):
+        if self.life > 0 and self.size > 0:
+            pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), int(self.size))
+
+def create_explosion(particles, x, y, color, count=20):
+    for _ in range(count):
+        dx = random.uniform(-4, 4)
+        dy = random.uniform(-4, 4)
+        size = random.uniform(2, 6)
+        life = random.randint(20, 40)
+        particles.append(Particle(x, y, color, size, life, dx, dy))
+
+# --- Screen Shake ---
+class ScreenShaker:
+    def __init__(self, intensity, duration):
+        self.intensity = intensity
+        self.duration = duration
+        self.timer = 0
+
+    def shake(self):
+        if self.timer < self.duration:
+            self.timer += 1
+            offset_x = random.randint(-self.intensity, self.intensity)
+            offset_y = random.randint(-self.intensity, self.intensity)
+            return (offset_x, offset_y)
+        return (0, 0)
 
 def draw_text(text, font, color, surface, x, y, center=True):
     """
@@ -31,6 +77,7 @@ def draw_text(text, font, color, surface, x, y, center=True):
         textrect.topleft = (x, y)
     surface.blit(textobj, textrect)
     return textrect
+
 
 def fade_transition(screen, clock, fade_out=True, duration=500):
     """

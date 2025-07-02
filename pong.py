@@ -11,7 +11,7 @@ import random
 
 # Import shared modules and constants.
 from config import BLACK, WHITE, DEFAULT_MUSIC_VOLUME
-from utils import draw_text, pause_menu, settings_menu
+from utils import draw_text, pause_menu, settings_menu, Particle, ScreenShaker, create_explosion
 import scores
 
 # --- Initialization ---
@@ -101,6 +101,18 @@ def main_menu(screen, clock, font, small_font):
         pygame.display.flip()
         clock.tick(15)
 
+def draw_retro_background(screen):
+    """Draws a retro-style holographic grid background."""
+    screen.fill((10, 10, 30)) # Dark Blue
+    # Horizontal lines
+    for i in range(0, SCREEN_HEIGHT, 20):
+        pygame.draw.line(screen, (20, 20, 50), (0, i), (SCREEN_WIDTH, i), 1)
+    # Vertical lines
+    for i in range(0, SCREEN_WIDTH, 20):
+        pygame.draw.line(screen, (20, 20, 50), (i, 0), (i, SCREEN_HEIGHT), 1)
+    # Center line
+    pygame.draw.line(screen, (100, 100, 100), (SCREEN_WIDTH // 2, 0), (SCREEN_WIDTH // 2, SCREEN_HEIGHT), 2)
+
 def game_loop(screen, clock, font, sounds):
     """
     Runs the main game loop for Pong.
@@ -125,6 +137,11 @@ def game_loop(screen, clock, font, sounds):
 
     # Initialize scores.
     player_score, ai_score = 0, 0
+
+    # Effects
+    particles = []
+    screen_shaker = None
+    hit_flash = 0
 
     # Main game loop.
     running = True
@@ -163,6 +180,8 @@ def game_loop(screen, clock, font, sounds):
             sounds['paddle_hit'].play()
             ball_speed_x *= -1.1  # Increase speed on hit.
             ball_speed_y *= 1.1
+            hit_flash = 10
+            create_explosion(particles, ball.centerx, ball.centery, (255, 255, 0))
 
         # Scoring.
         if ball.left <= 0:
@@ -171,12 +190,14 @@ def game_loop(screen, clock, font, sounds):
             ball_speed_x = 7 * random.choice((1, -1))
             ball_speed_y = 7 * random.choice((1, -1))
             sounds['score_point'].play()
+            screen_shaker = ScreenShaker(intensity=5, duration=15)
         if ball.right >= SCREEN_WIDTH:
             player_score += 1
             ball.center = (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
             ball_speed_x = 7 * random.choice((1, -1))
             ball_speed_y = 7 * random.choice((1, -1))
             sounds['score_point'].play()
+            screen_shaker = ScreenShaker(intensity=5, duration=15)
 
         # AI paddle movement.
         if ai_paddle.centery < ball.centery:
@@ -185,16 +206,41 @@ def game_loop(screen, clock, font, sounds):
             ai_paddle.y -= AI_PADDLE_SPEED
         ai_paddle.y = max(0, min(ai_paddle.y, SCREEN_HEIGHT - PADDLE_HEIGHT))
 
-        # --- Drawing ---
-        screen.fill(BLACK)
-        pygame.draw.rect(screen, WHITE, player_paddle)
-        pygame.draw.rect(screen, WHITE, ai_paddle)
-        pygame.draw.ellipse(screen, WHITE, ball)
-        pygame.draw.aaline(screen, WHITE, (SCREEN_WIDTH / 2, 0), (SCREEN_WIDTH / 2, SCREEN_HEIGHT))
+        # Update particles
+        for p in particles:
+            p.update()
+        particles = [p for p in particles if p.life > 0]
+        particles.append(Particle(ball.centerx, ball.centery, (200, 200, 0), 3, 10, 0, 0))
 
-        # Draw scores.
-        draw_text(str(player_score), font, WHITE, screen, SCREEN_WIDTH / 4, 50)
-        draw_text(str(ai_score), font, WHITE, screen, SCREEN_WIDTH * 3 / 4, 50)
+        # --- Drawing ---
+        screen_offset = (0, 0)
+        if screen_shaker:
+            screen_offset = screen_shaker.shake()
+            if screen_shaker.timer >= screen_shaker.duration:
+                screen_shaker = None
+        
+        temp_surface = screen.copy()
+        draw_retro_background(temp_surface)
+        
+        pygame.draw.rect(temp_surface, (200, 200, 200), player_paddle)
+        pygame.draw.rect(temp_surface, (200, 200, 200), ai_paddle)
+        pygame.draw.ellipse(temp_surface, (255, 255, 0), ball)
+
+        for p in particles:
+            p.draw(temp_surface)
+
+        draw_text(str(player_score), font, WHITE, temp_surface, SCREEN_WIDTH / 4, 50)
+        draw_text(str(ai_score), font, WHITE, temp_surface, SCREEN_WIDTH * 3 / 4, 50)
+
+        if hit_flash > 0:
+            flash_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            flash_surface.fill((255, 255, 255, hit_flash * 20))
+            temp_surface.blit(flash_surface, (0, 0))
+            hit_flash -= 1
+
+        screen.blit(temp_surface, screen_offset)
+        pygame.display.flip()
+        clock.tick(60)
 
         # Check for a winner.
         if player_score >= WINNING_SCORE:
@@ -202,8 +248,6 @@ def game_loop(screen, clock, font, sounds):
         if ai_score >= WINNING_SCORE:
             return "AI Wins!", ai_score
 
-        pygame.display.flip()
-        clock.tick(60)
 
 def end_screen(screen, clock, font, small_font, message):
     """

@@ -5,9 +5,10 @@ Pygame implementation of the classic arcade game Galaga.
 import pygame
 import sys
 import random
+import math
 
 from config import BLACK, WHITE, RED, GREEN, BLUE
-from utils import draw_text, pause_menu, settings_menu
+from utils import draw_text, pause_menu, settings_menu, Particle, create_explosion
 import scores
 
 # --- Initialization ---
@@ -37,6 +38,25 @@ LEVEL_CONFIGS = {
     5: {'enemy_speed_x': 6, 'enemy_speed_y': 35, 'enemy_fire_rate': 60, 'num_enemies': 20},
 }
 
+def create_starfield(num_stars):
+    """Creates a list of stars for the background."""
+    stars = []
+    for _ in range(num_stars):
+        x = random.randint(0, SCREEN_WIDTH)
+        y = random.randint(0, SCREEN_HEIGHT)
+        speed = random.uniform(0.5, 2)
+        stars.append({'x': x, 'y': y, 'speed': speed})
+    return stars
+
+def draw_starfield(screen, stars):
+    """Draws and updates the starfield."""
+    for star in stars:
+        star['y'] += star['speed']
+        if star['y'] > SCREEN_HEIGHT:
+            star['y'] = 0
+            star['x'] = random.randint(0, SCREEN_WIDTH)
+        pygame.draw.circle(screen, (150, 150, 150), (int(star['x']), int(star['y'])), 1)
+
 class Player:
     def __init__(self):
         self.rect = pygame.Rect(SCREEN_WIDTH // 2 - PLAYER_SIZE // 2, SCREEN_HEIGHT - 70, PLAYER_SIZE, PLAYER_SIZE)
@@ -49,23 +69,12 @@ class Player:
 
     def draw(self, screen):
         # Main body
-        pygame.draw.rect(screen, GREEN, self.rect)
+        pygame.draw.rect(screen, GREEN, self.rect, border_radius=5)
         # Cockpit
         pygame.draw.polygon(screen, WHITE, [
             (self.rect.centerx, self.rect.top),
             (self.rect.left + self.rect.width * 0.2, self.rect.centery),
             (self.rect.right - self.rect.width * 0.2, self.rect.centery)
-        ])
-        # Wings
-        pygame.draw.polygon(screen, GREEN, [
-            (self.rect.left, self.rect.bottom),
-            (self.rect.left - 15, self.rect.bottom - 15),
-            (self.rect.left, self.rect.centery)
-        ])
-        pygame.draw.polygon(screen, GREEN, [
-            (self.rect.right, self.rect.bottom),
-            (self.rect.right + 15, self.rect.bottom - 15),
-            (self.rect.right, self.rect.centery)
         ])
 
 class Bullet:
@@ -78,7 +87,7 @@ class Bullet:
         self.rect.y += self.speed
 
     def draw(self, screen):
-        pygame.draw.rect(screen, self.color, self.rect)
+        pygame.draw.rect(screen, self.color, self.rect, border_radius=3)
 
 class Enemy:
     def __init__(self, x, y, speed_x, speed_y, direction):
@@ -86,31 +95,32 @@ class Enemy:
         self.speed_x = speed_x
         self.speed_y = speed_y
         self.direction = direction # 1 for right, -1 for left
+        self.animation_timer = 0
 
     def update(self):
         self.rect.x += self.speed_x * self.direction
         if self.rect.right >= SCREEN_WIDTH or self.rect.left <= 0:
             self.direction *= -1
             self.rect.y += self.speed_y
+        self.animation_timer += 1
 
     def draw(self, screen):
+        # Simple animation
+        offset_y = math.sin(self.animation_timer * 0.1) * 5
         # Main body
-        pygame.draw.ellipse(screen, RED, self.rect)
+        pygame.draw.ellipse(screen, RED, self.rect.move(0, offset_y))
         # Wings
         pygame.draw.polygon(screen, (150, 0, 0), [
-            (self.rect.left, self.rect.centery),
-            (self.rect.centerx, self.rect.top - 10),
-            (self.rect.right, self.rect.centery)
+            (self.rect.left, self.rect.centery + offset_y),
+            (self.rect.centerx, self.rect.top - 10 + offset_y),
+            (self.rect.right, self.rect.centery + offset_y)
         ])
-        # Eyes
-        pygame.draw.circle(screen, WHITE, (self.rect.centerx - self.rect.width // 4, self.rect.centery - self.rect.height // 8), 3)
-        pygame.draw.circle(screen, WHITE, (self.rect.centerx + self.rect.width // 4, self.rect.centery - self.rect.height // 8), 3)
 
 def create_enemies(num_enemies, enemy_speed_x, enemy_speed_y):
     enemies = []
-    rows = (num_enemies + ENEMY_COLS - 1) // ENEMY_COLS # Calculate rows needed
+    rows = (num_enemies + 10 - 1) // 10 # Calculate rows needed
     for row in range(rows):
-        for col in range(ENEMY_COLS):
+        for col in range(10):
             if len(enemies) < num_enemies:
                 x = col * (ENEMY_SIZE + 10) + 50
                 y = row * (ENEMY_SIZE + 10) + 50
@@ -191,6 +201,8 @@ def game_loop(screen, clock, font, level, total_score=0):
     player_bullets = []
     enemy_bullets = []
     score = total_score
+    particles = []
+    stars = create_starfield(100)
 
     # Get level configurations
     config = LEVEL_CONFIGS[level]
@@ -213,8 +225,12 @@ def game_loop(screen, clock, font, level, total_score=0):
                     if pause_choice == 'quit': return score, 'quit'
 
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]: player.move(-PLAYER_SPEED)
-        if keys[pygame.K_RIGHT]: player.move(PLAYER_SPEED)
+        if keys[pygame.K_LEFT]:
+            player.move(-PLAYER_SPEED)
+            particles.append(Particle(player.rect.right, player.rect.centery, (200, 200, 255), 2, 15, 2, 0))
+        if keys[pygame.K_RIGHT]:
+            player.move(PLAYER_SPEED)
+            particles.append(Particle(player.rect.left, player.rect.centery, (200, 200, 255), 2, 15, -2, 0))
 
         # Update bullets
         for bullet in player_bullets[:]:
@@ -238,6 +254,7 @@ def game_loop(screen, clock, font, level, total_score=0):
                     player_bullets.remove(p_bullet)
                     enemies.remove(enemy)
                     score += 100
+                    create_explosion(particles, enemy.rect.centerx, enemy.rect.centery, RED)
                     break
         
         # Collisions: Enemy bullets and player
@@ -245,24 +262,33 @@ def game_loop(screen, clock, font, level, total_score=0):
             if e_bullet.rect.colliderect(player.rect):
                 enemy_bullets.remove(e_bullet)
                 player.lives -= 1
+                create_explosion(particles, player.rect.centerx, player.rect.centery, GREEN)
                 if player.lives <= 0: return score, 'game_over'
 
         # Collisions: Enemies and player (if they reach bottom)
         for enemy in enemies[:]:
             if enemy.rect.colliderect(player.rect):
                 player.lives = 0 # Instant game over if enemy touches player
+                create_explosion(particles, player.rect.centerx, player.rect.centery, GREEN, 50)
                 return score, 'game_over'
 
         # Check for win condition
         if not enemies:
             return score, 'next_level'
 
+        # Update particles
+        for p in particles:
+            p.update()
+        particles = [p for p in particles if p.life > 0]
+
         # Drawing
         screen.fill(BLACK)
+        draw_starfield(screen, stars)
         player.draw(screen)
         for bullet in player_bullets: bullet.draw(screen)
         for enemy in enemies: enemy.draw(screen)
         for bullet in enemy_bullets: bullet.draw(screen)
+        for p in particles: p.draw(screen)
 
         # Draw UI
         draw_text(f"Score: {score}", font, WHITE, screen, 100, 20)
@@ -271,6 +297,7 @@ def game_loop(screen, clock, font, level, total_score=0):
 
         pygame.display.flip()
         clock.tick(60)
+
 
 def congratulations_screen(screen, clock, font, final_score):
     """

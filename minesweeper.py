@@ -10,8 +10,7 @@ import sys
 import random
 
 # Import shared modules and constants.
-from config import BLACK, WHITE, GRAY, RED, DEFAULT_MUSIC_VOLUME
-from utils import draw_text, pause_menu, settings_menu
+from utils import draw_text, pause_menu, settings_menu, Particle, create_explosion
 
 # --- Initialization ---
 # Initialize all imported Pygame modules.
@@ -53,6 +52,7 @@ class Cell:
         self.x, self.y = x, y
         self.is_mine = self.is_revealed = self.is_flagged = False
         self.adjacent_mines = 0
+        self.animation_timer = 0
 
     def draw(self, surface, font):
         """
@@ -71,10 +71,23 @@ class Cell:
                 text = font.render(str(self.adjacent_mines), True, COLORS[self.adjacent_mines - 1])
                 surface.blit(text, text.get_rect(center=rect.center))
         else:
+            # 3D effect for unrevealed cells
             pygame.draw.rect(surface, GRAY, rect)
+            pygame.draw.line(surface, WHITE, rect.topleft, rect.topright, 2)
+            pygame.draw.line(surface, WHITE, rect.topleft, rect.bottomleft, 2)
+            pygame.draw.line(surface, DARK_GRAY, rect.bottomleft, rect.bottomright, 2)
+            pygame.draw.line(surface, DARK_GRAY, rect.topright, rect.bottomright, 2)
+
             if self.is_flagged:
-                pygame.draw.line(surface, RED, rect.topleft, rect.bottomright, 2)
-                pygame.draw.line(surface, RED, rect.topright, rect.bottomleft, 2)
+                if self.animation_timer < 10:
+                    self.animation_timer += 1
+                flag_poly = [
+                    (rect.centerx, rect.top + 5),
+                    (rect.right - 5, rect.centery - 5),
+                    (rect.centerx, rect.centery)
+                ]
+                pygame.draw.polygon(surface, RED, flag_poly)
+                pygame.draw.line(surface, BLACK, (rect.centerx, rect.top + 5), (rect.centerx, rect.bottom - 5), 3)
         pygame.draw.rect(surface, BLACK, rect, 1)
 
 def main_menu(screen, clock, font, small_font):
@@ -283,6 +296,7 @@ def game_loop(screen, clock, font, cell_font, level):
     # Initialize game state.
     board = create_board(current_grid_size, current_num_mines)
     game_over = game_won = False
+    particles = []
 
     # Main game loop.
     while True:
@@ -317,10 +331,14 @@ def game_loop(screen, clock, font, cell_font, level):
                         # Reveal all mines when the game is over.
                         for row in board:
                             for cell in row:
-                                if cell.is_mine: cell.is_revealed = True
+                                if cell.is_mine:
+                                    cell.is_revealed = True
+                                    create_explosion(particles, cell.x * CELL_SIZE + CELL_SIZE // 2, cell.y * CELL_SIZE + CELL_SIZE // 2, RED)
                 elif event.button == 3:  # Right click
                     if not board[grid_x][grid_y].is_revealed:
                         board[grid_x][grid_y].is_flagged = not board[grid_x][grid_y].is_flagged
+                        if board[grid_x][grid_y].is_flagged:
+                            board[grid_x][grid_y].animation_timer = 0
 
         # Check for win condition.
         if not game_over and not game_won:
@@ -333,6 +351,13 @@ def game_loop(screen, clock, font, cell_font, level):
         for x in range(current_grid_size):
             for y in range(current_grid_size):
                 board[x][y].draw(screen, cell_font)
+        
+        # Update and draw particles
+        for p in particles:
+            p.update()
+        particles = [p for p in particles if p.life > 0]
+        for p in particles:
+            p.draw(screen)
 
         # Display end game messages.
         if game_over:
@@ -371,6 +396,7 @@ def game_loop(screen, clock, font, cell_font, level):
                     # Check if quit button was clicked
                     quit_button_rect = pygame.Rect(current_width / 2 - 125, current_height / 2 + 80, 250, 60)
                     if quit_button_rect.collidepoint(mx, my): return 'quit'
+
 
 def congratulations_screen(screen, clock, font):
     """

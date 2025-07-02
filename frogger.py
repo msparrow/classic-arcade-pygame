@@ -39,6 +39,56 @@ RIVER_COLOR = BLUE
 SAFE_COLOR = GREEN
 CAR_COLOR = RED
 LOG_COLOR = (139, 69, 19) # Brown
+LAVA_COLOR = (255, 100, 0)
+ROCK_COLOR = (80, 80, 80)
+AIRPORT_COLOR = (180, 180, 180)
+PLANE_COLOR = (220, 220, 220)
+SEA_COLOR = (0, 105, 148)
+BOAT_COLOR = (210, 180, 140)
+SKY_COLOR = (135, 206, 235)
+CLOUD_COLOR = (255, 255, 255)
+BIRD_COLOR = (50, 50, 50)
+
+
+# --- Level Configuration ---
+LEVEL_THEMES = {
+    1: {
+        "name": "Classic Crossing",
+        "zone1_bg": ROAD_COLOR,
+        "zone2_bg": RIVER_COLOR,
+        "obstacle_class": "Car",
+        "floater_class": "Log",
+    },
+    2: {
+        "name": "Volcanic Venture",
+        "zone1_bg": (60, 60, 60), # Rocky ground
+        "zone2_bg": LAVA_COLOR,
+        "obstacle_class": "Boulder",
+        "floater_class": "Rock",
+    },
+    3: {
+        "name": "Airport Antics",
+        "zone1_bg": AIRPORT_COLOR,
+        "zone2_bg": (100, 120, 140), # Baggage claim
+        "obstacle_class": "Airplane",
+        "floater_class": "Baggage",
+    },
+    4: {
+        "name": "High Seas Hijinks",
+        "zone1_bg": (200, 180, 140), # Pier
+        "zone2_bg": SEA_COLOR,
+        "obstacle_class": "Boat",
+        "floater_class": "Buoy",
+    },
+    5: {
+        "name": "Heavenly Hop",
+        "zone1_bg": (170, 215, 230), # Lighter sky
+        "zone2_bg": SKY_COLOR,
+        "obstacle_class": "Bird",
+        "floater_class": "Cloud",
+    }
+}
+
 
 class Frog:
     def __init__(self):
@@ -70,58 +120,131 @@ class Frog:
         pygame.draw.circle(screen, BLACK, (self.rect.centerx - eye_offset, self.rect.top + eye_offset), eye_radius // 2)
         pygame.draw.circle(screen, BLACK, (self.rect.centerx + eye_offset, self.rect.top + eye_offset), eye_radius // 2)
 
-class Car:
-    def __init__(self, x, y, speed, direction):
-        self.x = x
-        self.y = y
-        self.speed = speed
-        self.direction = direction # 1 for right, -1 for left
-        self.width = random.randint(50, 100)
-        self.rect = pygame.Rect(self.x, self.y, self.width, FROG_SIZE)
-
-    def update(self):
-        self.x += self.speed * self.direction
-        if self.direction == 1 and self.x > SCREEN_WIDTH: # Moving right, off screen
-            self.x = -self.width
-        elif self.direction == -1 and self.x < -self.width: # Moving left, off screen
-            self.x = SCREEN_WIDTH
-        self.rect.topleft = (self.x, self.y)
-
-    def draw(self, screen):
-        # Main body of the car
-        pygame.draw.rect(screen, CAR_COLOR, self.rect)
-        # Roof/Cabin
-        pygame.draw.rect(screen, (CAR_COLOR[0] - 50, CAR_COLOR[1] - 50, CAR_COLOR[2] - 50), 
-                         (self.rect.x + self.rect.width * 0.2, self.rect.y, self.rect.width * 0.6, self.rect.height * 0.6))
-        # Headlights
-        pygame.draw.rect(screen, WHITE, (self.rect.x + 2, self.rect.y + self.rect.height - 5, 5, 3))
-        pygame.draw.rect(screen, WHITE, (self.rect.x + self.rect.width - 7, self.rect.y + self.rect.height - 5, 5, 3))
-
-class Log:
-    def __init__(self, x, y, speed, direction):
+class Obstacle:
+    def __init__(self, x, y, speed, direction, width, color):
         self.x = x
         self.y = y
         self.speed = speed
         self.direction = direction
-        self.width = random.randint(80, 150)
+        self.width = width
+        self.color = color
         self.rect = pygame.Rect(self.x, self.y, self.width, FROG_SIZE)
 
     def update(self):
         self.x += self.speed * self.direction
-        if self.direction == 1 and self.x > SCREEN_WIDTH: # Moving right, off screen
+        if self.direction == 1 and self.x > SCREEN_WIDTH:
             self.x = -self.width
-        elif self.direction == -1 and self.x < -self.width: # Moving left, off screen
+        elif self.direction == -1 and self.x < -self.width:
             self.x = SCREEN_WIDTH
         self.rect.topleft = (self.x, self.y)
 
     def draw(self, screen):
-        # Main body of the log
-        pygame.draw.rect(screen, LOG_COLOR, self.rect)
-        # Add some lines to simulate wood grain
+        pygame.draw.rect(screen, self.color, self.rect)
+
+class Car(Obstacle):
+    def __init__(self, x, y, speed, direction):
+        super().__init__(x, y, speed, direction, random.randint(50, 100), CAR_COLOR)
+
+    def draw(self, screen):
+        super().draw(screen)
+        # Roof/Cabin
+        roof_color = (max(0, self.color[0] - 50), max(0, self.color[1] - 50), max(0, self.color[2] - 50))
+        pygame.draw.rect(screen, roof_color, 
+                         (self.rect.x + self.rect.width * 0.2, self.rect.y, self.rect.width * 0.6, self.rect.height * 0.6))
+
+class Boulder(Obstacle):
+    def __init__(self, x, y, speed, direction):
+        super().__init__(x, y, speed, direction, random.randint(40, 60), ROCK_COLOR)
+    
+    def draw(self, screen):
+        pygame.draw.circle(screen, self.color, self.rect.center, self.width // 2)
+
+class Airplane(Obstacle):
+    def __init__(self, x, y, speed, direction):
+        super().__init__(x, y, speed, direction, 120, PLANE_COLOR)
+
+    def draw(self, screen):
+        super().draw(screen)
+        # Wings
+        pygame.draw.rect(screen, self.color, (self.rect.centerx - 60, self.rect.centery - 5, 120, 10))
+        # Tail
+        pygame.draw.rect(screen, self.color, (self.rect.x + 10, self.rect.y - 10, 10, 20))
+
+class Boat(Obstacle):
+    def __init__(self, x, y, speed, direction):
+        super().__init__(x, y, speed, direction, 100, BOAT_COLOR)
+
+    def draw(self, screen):
+        # Hull
+        pygame.draw.polygon(screen, self.color, [
+            (self.rect.left, self.rect.bottom),
+            (self.rect.right, self.rect.bottom),
+            (self.rect.right - 20, self.rect.top),
+            (self.rect.left + 20, self.rect.top)
+        ])
+
+class Bird(Obstacle):
+    def __init__(self, x, y, speed, direction):
+        super().__init__(x, y, speed, direction, 40, BIRD_COLOR)
+
+    def draw(self, screen):
+        # Wings
+        pygame.draw.polygon(screen, self.color, [
+            (self.rect.left, self.rect.centery),
+            (self.rect.centerx, self.rect.top),
+            (self.rect.right, self.rect.centery),
+            (self.rect.centerx, self.rect.bottom)
+        ])
+
+class Floater(Obstacle):
+    pass
+
+class Log(Floater):
+    def __init__(self, x, y, speed, direction):
+        super().__init__(x, y, speed, direction, random.randint(80, 150), LOG_COLOR)
+
+    def draw(self, screen):
+        super().draw(screen)
+        # Wood grain
         for i in range(1, 4):
-            pygame.draw.line(screen, (LOG_COLOR[0] - 20, LOG_COLOR[1] - 20, LOG_COLOR[2] - 20),
+            wood_grain_color = (max(0, self.color[0] - 20), max(0, self.color[1] - 20), max(0, self.color[2] - 20))
+            pygame.draw.line(screen, wood_grain_color,
                              (self.rect.x, self.rect.y + i * (self.rect.height // 4)),
                              (self.rect.x + self.rect.width, self.rect.y + i * (self.rect.height // 4)), 2)
+
+class Rock(Floater):
+    def __init__(self, x, y, speed, direction):
+        super().__init__(x, y, speed, direction, random.randint(60, 100), ROCK_COLOR)
+
+    def draw(self, screen):
+        pygame.draw.ellipse(screen, self.color, self.rect)
+
+class Baggage(Floater):
+    def __init__(self, x, y, speed, direction):
+        super().__init__(x, y, speed, direction, random.randint(50, 80), (random.randint(50, 150), random.randint(50, 150), random.randint(50, 150)))
+
+class Buoy(Floater):
+    def __init__(self, x, y, speed, direction):
+        super().__init__(x, y, speed, direction, 30, (255, 0, 0))
+
+    def draw(self, screen):
+        pygame.draw.circle(screen, self.color, self.rect.center, self.width // 2)
+        pygame.draw.rect(screen, (255, 255, 0), (self.rect.centerx - 5, self.rect.top - 10, 10, 10))
+
+class Cloud(Floater):
+    def __init__(self, x, y, speed, direction):
+        super().__init__(x, y, speed, direction, random.randint(100, 200), CLOUD_COLOR)
+
+    def draw(self, screen):
+        pygame.draw.ellipse(screen, self.color, self.rect)
+        pygame.draw.ellipse(screen, self.color, self.rect.move(-20, 10))
+        pygame.draw.ellipse(screen, self.color, self.rect.move(20, 10))
+
+def get_obstacle_class(class_name):
+    return {
+        "Car": Car, "Boulder": Boulder, "Airplane": Airplane, "Boat": Boat, "Bird": Bird,
+        "Log": Log, "Rock": Rock, "Baggage": Baggage, "Buoy": Buoy, "Cloud": Cloud
+    }[class_name]
 
 def main_menu(screen, clock, font, small_font):
     """Displays the main menu for Frogger."""
@@ -181,36 +304,33 @@ def main_menu(screen, clock, font, small_font):
         clock.tick(15)
 
 def game_loop(screen, clock, font, level):
-    pygame.display.set_caption(f"Frogger - Level {level}")
+    pygame.display.set_caption(f"Frogger - Level {level}: {LEVEL_THEMES[level]['name']}")
     frog = Frog()
     score = 0
     
-    # Generate cars and logs based on level
-    cars = []
+    theme = LEVEL_THEMES[level]
+    ObstacleClass = get_obstacle_class(theme["obstacle_class"])
+    FloaterClass = get_obstacle_class(theme["floater_class"])
+
+    obstacles = []
     for i in range(NUM_ROAD_LANES):
         y = ROAD_TOP + i * LANE_HEIGHT + (LANE_HEIGHT - FROG_SIZE) // 2
-        num_cars = 2 + level // 2 # More cars on higher levels
-        for _ in range(num_cars):
+        num_obstacles = 2 + level // 2
+        for _ in range(num_obstacles):
             speed = random.randint(CAR_SPEED_MIN + level, CAR_SPEED_MAX + level)
-            direction = 1 if i % 2 == 0 else -1 # Alternate direction
+            direction = 1 if i % 2 == 0 else -1
             x = random.randint(0, SCREEN_WIDTH)
-            cars.append(Car(x, y, speed, direction))
+            obstacles.append(ObstacleClass(x, y, speed, direction))
 
-    logs = []
+    floaters = []
     for i in range(NUM_RIVER_LANES):
         y = RIVER_TOP + i * LANE_HEIGHT + (LANE_HEIGHT - FROG_SIZE) // 2
-        num_logs = 2 + level // 2 # More logs on higher levels
-        for _ in range(num_logs):
+        num_floaters = 2 + level // 2
+        for _ in range(num_floaters):
             speed = random.randint(LOG_SPEED_MIN + level, LOG_SPEED_MAX + level)
-            direction = 1 if i % 2 == 1 else -1 # Alternate direction
+            direction = 1 if i % 2 == 1 else -1
             x = random.randint(0, SCREEN_WIDTH)
-            logs.append(Log(x, y, speed, direction))
-
-    # Home positions for frogs to reach
-    home_positions = []
-    for i in range(5): # 5 home spots
-        home_positions.append(pygame.Rect(50 + i * 150, HOME_ROW_TOP, FROG_SIZE, FROG_SIZE))
-    occupied_homes = [False] * 5
+            floaters.append(FloaterClass(x, y, speed, direction))
 
     running = True
     while running:
@@ -218,7 +338,11 @@ def game_loop(screen, clock, font, level):
             if event.type == pygame.QUIT:
                 return score, 'quit'
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP: frog.move(0, -FROG_SPEED)
+                if event.key == pygame.K_UP:
+                    frog.move(0, -FROG_SPEED)
+                    # Check for level completion
+                    if frog.y < RIVER_TOP:
+                        return score + 100, 'next_level'
                 elif event.key == pygame.K_DOWN: frog.move(0, FROG_SPEED)
                 elif event.key == pygame.K_LEFT: frog.move(-FROG_SPEED, 0)
                 elif event.key == pygame.K_RIGHT: frog.move(FROG_SPEED, 0)
@@ -226,49 +350,31 @@ def game_loop(screen, clock, font, level):
                     pause_choice = pause_menu(screen, clock, SCREEN_WIDTH, SCREEN_HEIGHT)
                     if pause_choice == 'quit': return score, 'quit'
 
-        # Update cars and logs
-        for car in cars: car.update()
-        for log in logs: log.update()
+        # Update obstacles and floaters
+        for obstacle in obstacles: obstacle.update()
+        for floater in floaters: floater.update()
 
-        # Frog on log logic
+        # Frog on floater logic
         frog.on_log = False
-        if RIVER_TOP <= frog.y < ROAD_TOP: # If in river section
-            for log in logs:
-                if frog.rect.colliderect(log.rect):
-                    frog.x += log.speed * log.direction
+        if RIVER_TOP <= frog.y < ROAD_TOP:
+            for floater in floaters:
+                if frog.rect.colliderect(floater.rect):
+                    frog.x += floater.speed * floater.direction
+                    frog.rect.x = frog.x
                     frog.on_log = True
                     break
-            if not frog.on_log: # If in water and not on a log
+            if not frog.on_log:
                 frog.lives -= 1
                 if frog.lives <= 0: return score, 'game_over'
                 frog.reset()
 
-        # Collision with cars
+        # Collision with obstacles
         if ROAD_TOP <= frog.y < SAFE_ZONE_TOP:
-            for car in cars:
-                if frog.rect.colliderect(car.rect):
+            for obstacle in obstacles:
+                if frog.rect.colliderect(obstacle.rect):
                     frog.lives -= 1
                     if frog.lives <= 0: return score, 'game_over'
                     frog.reset()
-
-        # Check if frog reached home
-        if frog.y < RIVER_TOP:
-            home_reached = False
-            for i, home_rect in enumerate(home_positions):
-                if frog.rect.colliderect(home_rect) and not occupied_homes[i]:
-                    occupied_homes[i] = True
-                    score += 100 # Score for reaching home
-                    frog.reset()
-                    home_reached = True
-                    break
-            if not home_reached: # Fell into water at home row or hit occupied home
-                frog.lives -= 1
-                if frog.lives <= 0: return score, 'game_over'
-                frog.reset()
-
-        # Check if all homes are occupied (level complete)
-        if all(occupied_homes):
-            return score, 'next_level'
 
         # Drawing
         screen.fill(BLACK)
@@ -277,18 +383,12 @@ def game_loop(screen, clock, font, level):
         pygame.draw.rect(screen, SAFE_COLOR, (0, SAFE_ZONE_TOP, SCREEN_WIDTH, LANE_HEIGHT))
         pygame.draw.rect(screen, SAFE_COLOR, (0, HOME_ROW_TOP, SCREEN_WIDTH, LANE_HEIGHT))
 
-        # Draw road lanes
-        for i in range(NUM_ROAD_LANES):
-            y = ROAD_TOP + i * LANE_HEIGHT
-            pygame.draw.rect(screen, ROAD_COLOR, (0, y, SCREEN_WIDTH, LANE_HEIGHT))
+        # Draw themed zones
+        pygame.draw.rect(screen, theme["zone1_bg"], (0, ROAD_TOP, SCREEN_WIDTH, LANE_HEIGHT * NUM_ROAD_LANES))
+        pygame.draw.rect(screen, theme["zone2_bg"], (0, RIVER_TOP, SCREEN_WIDTH, LANE_HEIGHT * NUM_RIVER_LANES))
 
-        # Draw river lanes
-        for i in range(NUM_RIVER_LANES):
-            y = RIVER_TOP + i * LANE_HEIGHT
-            pygame.draw.rect(screen, RIVER_COLOR, (0, y, SCREEN_WIDTH, LANE_HEIGHT))
-
-        for car in cars: car.draw(screen)
-        for log in logs: log.draw(screen)
+        for obstacle in obstacles: obstacle.draw(screen)
+        for floater in floaters: floater.draw(screen)
         frog.draw(screen)
 
         # Draw UI
@@ -298,6 +398,7 @@ def game_loop(screen, clock, font, level):
 
         pygame.display.flip()
         clock.tick(30)
+
 
 def congratulations_screen(screen, clock, font, final_score):
     """
@@ -446,7 +547,7 @@ def run_game(screen, clock):
 
         while current_level <= 5:
             level_score, status = game_loop(screen, clock, small_font, current_level)
-            total_score += level_score # Accumulate score across levels
+            total_score += level_score
 
             if status == 'next_level':
                 current_level += 1
@@ -454,10 +555,12 @@ def run_game(screen, clock):
                     game_outcome = 'win'
                     break
                 else:
-                    end_choice = end_screen(screen, clock, font, f"Level {current_level - 1} Complete! Score: {total_score}")
-                    if end_choice == 'quit':
-                        game_outcome = 'quit'
-                        break
+                    # Show a transition screen
+                    screen.fill(BLACK)
+                    draw_text(f"Level {current_level -1} Complete!", font, WHITE, screen, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 50)
+                    draw_text(f"Score: {total_score}", small_font, WHITE, screen, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 50)
+                    pygame.display.flip()
+                    pygame.time.wait(2000)
             elif status == 'game_over':
                 game_outcome = 'game_over'
                 break
