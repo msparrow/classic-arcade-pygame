@@ -31,11 +31,9 @@ BULLET_WIDTH, BULLET_HEIGHT = 5, 15
 
 # Level configurations
 LEVEL_CONFIGS = {
-    1: {'enemy_speed_x': 2, 'enemy_speed_y': 15, 'enemy_fire_rate': 150, 'num_enemies': 10},
-    2: {'enemy_speed_x': 3, 'enemy_speed_y': 20, 'enemy_fire_rate': 120, 'num_enemies': 12},
-    3: {'enemy_speed_x': 4, 'enemy_speed_y': 25, 'enemy_fire_rate': 100, 'num_enemies': 15},
-    4: {'enemy_speed_x': 5, 'enemy_speed_y': 30, 'enemy_fire_rate': 80, 'num_enemies': 18},
-    5: {'enemy_speed_x': 6, 'enemy_speed_y': 35, 'enemy_fire_rate': 60, 'num_enemies': 20},
+    1: {'enemy_speed_x': 2, 'enemy_speed_y': 15, 'enemy_fire_rate': 150, 'num_enemies': 10, 'color': (255, 0, 0)},
+    2: {'enemy_speed_x': 3, 'enemy_speed_y': 20, 'enemy_fire_rate': 120, 'num_enemies': 15, 'color': (0, 255, 0)},
+    3: {'enemy_speed_x': 4, 'enemy_speed_y': 25, 'enemy_fire_rate': 100, 'num_enemies': 20, 'color': (0, 0, 255)},
 }
 
 def create_starfield(num_stars):
@@ -90,12 +88,13 @@ class Bullet:
         pygame.draw.rect(screen, self.color, self.rect, border_radius=3)
 
 class Enemy:
-    def __init__(self, x, y, speed_x, speed_y, direction):
+    def __init__(self, x, y, speed_x, speed_y, direction, color):
         self.rect = pygame.Rect(x, y, ENEMY_SIZE, ENEMY_SIZE)
         self.speed_x = speed_x
         self.speed_y = speed_y
         self.direction = direction # 1 for right, -1 for left
         self.animation_timer = 0
+        self.color = color
 
     def update(self):
         self.rect.x += self.speed_x * self.direction
@@ -107,16 +106,31 @@ class Enemy:
     def draw(self, screen):
         # Simple animation
         offset_y = math.sin(self.animation_timer * 0.1) * 5
-        # Main body
-        pygame.draw.ellipse(screen, RED, self.rect.move(0, offset_y))
+        
+        # Main body with gradient
+        top_color = (min(self.color[0] + 50, 255), min(self.color[1] + 50, 255), min(self.color[2] + 50, 255))
+        bottom_color = self.color
+        pygame.draw.rect(screen, top_color, (self.rect.left, self.rect.top + offset_y, self.rect.width, self.rect.height // 2), border_top_left_radius=5, border_top_right_radius=5)
+        pygame.draw.rect(screen, bottom_color, (self.rect.left, self.rect.centery + offset_y, self.rect.width, self.rect.height // 2), border_bottom_left_radius=5, border_bottom_right_radius=5)
+
         # Wings
-        pygame.draw.polygon(screen, (150, 0, 0), [
-            (self.rect.left, self.rect.centery + offset_y),
-            (self.rect.centerx, self.rect.top - 10 + offset_y),
-            (self.rect.right, self.rect.centery + offset_y)
+        wing_color = (max(self.color[0] - 50, 0), max(self.color[1] - 50, 0), max(self.color[2] - 50, 0))
+        pygame.draw.polygon(screen, wing_color, [
+            (self.rect.left - 10, self.rect.bottom + offset_y),
+            (self.rect.left + 10, self.rect.centery + offset_y),
+            (self.rect.left, self.rect.centery + 10 + offset_y)
+        ])
+        pygame.draw.polygon(screen, wing_color, [
+            (self.rect.right + 10, self.rect.bottom + offset_y),
+            (self.rect.right - 10, self.rect.centery + offset_y),
+            (self.rect.right, self.rect.centery + 10 + offset_y)
         ])
 
-def create_enemies(num_enemies, enemy_speed_x, enemy_speed_y):
+        # Cockpit
+        cockpit_color = (200, 200, 255)
+        pygame.draw.ellipse(screen, cockpit_color, pygame.Rect(self.rect.centerx - 5, self.rect.top + 5 + offset_y, 10, 15))
+
+def create_enemies(num_enemies, enemy_speed_x, enemy_speed_y, color):
     enemies = []
     rows = (num_enemies + 10 - 1) // 10 # Calculate rows needed
     for row in range(rows):
@@ -124,7 +138,7 @@ def create_enemies(num_enemies, enemy_speed_x, enemy_speed_y):
             if len(enemies) < num_enemies:
                 x = col * (ENEMY_SIZE + 10) + 50
                 y = row * (ENEMY_SIZE + 10) + 50
-                enemies.append(Enemy(x, y, enemy_speed_x, enemy_speed_y, 1))
+                enemies.append(Enemy(x, y, enemy_speed_x, enemy_speed_y, 1, color))
     return enemies
 
 def main_menu(screen, clock, font, small_font):
@@ -210,8 +224,9 @@ def game_loop(screen, clock, font, level, total_score=0):
     enemy_speed_y = config['enemy_speed_y']
     enemy_fire_rate = config['enemy_fire_rate']
     num_enemies = config['num_enemies']
+    enemy_color = config['color']
 
-    enemies = create_enemies(num_enemies, enemy_speed_x, enemy_speed_y)
+    enemies = create_enemies(num_enemies, enemy_speed_x, enemy_speed_y, enemy_color)
 
     while True:
         for event in pygame.event.get():
@@ -424,6 +439,72 @@ def end_screen(screen, clock, font, message):
         pygame.display.flip()
         clock.tick(15)
 
+def next_level_screen(screen, clock, font, level, score):
+    """
+    Displays a screen between levels with a "Continue" button.
+
+    Args:
+        screen (pygame.Surface): The screen to draw on.
+        clock (pygame.time.Clock): The Pygame clock object.
+        font (pygame.font.Font): The font for the text.
+        level (int): The level that was just completed.
+        score (int): The player's current score.
+
+    Returns:
+        str: The action selected by the user ('continue' or 'quit').
+    """
+    # Colors for the next level screen UI.
+    BACKGROUND_COLOR = (10, 10, 30) # Darker blue
+    TEXT_COLOR = (255, 255, 255)
+    HIGHLIGHT_COLOR = (0, 255, 255) # Cyan
+    BUTTON_COLOR = (50, 50, 50)
+    BUTTON_HOVER_COLOR = (80, 80, 80)
+    BORDER_COLOR = (150, 150, 150)
+
+    title_font = pygame.font.Font(None, 60)
+    button_font = pygame.font.Font(None, 40)
+
+    while True:
+        screen.fill(BACKGROUND_COLOR)
+        draw_text(f"Level {level} Complete!", title_font, HIGHLIGHT_COLOR, screen, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 3)
+        draw_text(f"Score: {score}", font, TEXT_COLOR, screen, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
+
+        mx, my = pygame.mouse.get_pos()
+
+        # Button dimensions and spacing
+        button_width = 250
+        button_height = 60
+        button_spacing = 20
+
+        continue_y = SCREEN_HEIGHT / 2 + 100
+        quit_y = continue_y + button_height + button_spacing
+
+        continue_button_rect = pygame.Rect(SCREEN_WIDTH / 2 - button_width / 2, continue_y, button_width, button_height)
+        quit_button_rect = pygame.Rect(SCREEN_WIDTH / 2 - button_width / 2, quit_y, button_width, button_height)
+
+        buttons = [
+            {"text": "Continue", "rect": continue_button_rect, "action": "continue"},
+            {"text": "Back to Menu", "rect": quit_button_rect, "action": "quit"}
+        ]
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return 'quit'
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                for button in buttons:
+                    if button["rect"].collidepoint(event.pos):
+                        return button["action"]
+
+        # Draw buttons with hover effect
+        for button in buttons:
+            current_button_color = BUTTON_HOVER_COLOR if button["rect"].collidepoint(mx, my) else BUTTON_COLOR
+            pygame.draw.rect(screen, current_button_color, button["rect"], border_radius=10)
+            pygame.draw.rect(screen, BORDER_COLOR, button["rect"], 2, border_radius=10)
+            draw_text(button["text"], button_font, TEXT_COLOR, screen, button["rect"].centerx, button["rect"].centery)
+
+        pygame.display.flip()
+        clock.tick(15)
+
 def run_game(screen, clock):
     """
     Main function to manage the game states for Galaga.
@@ -444,18 +525,18 @@ def run_game(screen, clock):
         total_score = 0
         game_outcome = None
 
-        while current_level <= 5:
+        while current_level <= 3:
             level_score, status = game_loop(screen, clock, small_font, current_level, total_score)
             total_score = level_score # Update cumulative score
 
             if status == 'next_level':
                 current_level += 1
-                if current_level > 5:
+                if current_level > 3:
                     game_outcome = 'win'
                     break
                 else:
-                    end_choice = end_screen(screen, clock, font, f"Level {current_level - 1} Complete! Score: {total_score}")
-                    if end_choice == 'quit':
+                    next_level_choice = next_level_screen(screen, clock, small_font, current_level - 1, total_score)
+                    if next_level_choice == 'quit':
                         game_outcome = 'quit'
                         break
             elif status == 'game_over':

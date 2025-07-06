@@ -19,7 +19,7 @@ pygame.init()
 # --- Constants ---
 # Grid dimensions and mine count.
 # These will be overridden by level settings.
-GRID_SIZE, NUM_MINES, CELL_SIZE = 20, 40, 30
+GRID_SIZE, NUM_MINES, CELL_SIZE = 20, 40, 40
 # Screen dimensions derived from grid size and cell size.
 WIDTH, HEIGHT = GRID_SIZE * CELL_SIZE, GRID_SIZE * CELL_SIZE
 
@@ -103,6 +103,7 @@ def main_menu(screen, clock, font, small_font):
     Returns:
         str: The action selected by the user ('play', 'settings', or 'quit').
     """
+    from config import LAUNCHER_WIDTH, LAUNCHER_HEIGHT
     # Colors for the main menu UI.
     BACKGROUND_COLOR = (10, 30, 10)
     TEXT_COLOR = (255, 255, 255)
@@ -114,7 +115,7 @@ def main_menu(screen, clock, font, small_font):
     # Main loop for the menu.
     while True:
         screen.fill(BACKGROUND_COLOR)
-        draw_text("Minesweeper", font, HIGHLIGHT_COLOR, screen, WIDTH / 2, HEIGHT / 4)
+        draw_text("Minesweeper", font, HIGHLIGHT_COLOR, screen, LAUNCHER_WIDTH / 2, LAUNCHER_HEIGHT / 4)
 
         mx, my = pygame.mouse.get_pos()
 
@@ -123,13 +124,13 @@ def main_menu(screen, clock, font, small_font):
         button_height = 60
         button_spacing = 20
 
-        settings_y = HEIGHT / 2 - 50
+        settings_y = LAUNCHER_HEIGHT / 2 - 50
         start_y = settings_y + button_height + button_spacing
         quit_y = start_y + button_height + button_spacing
 
-        settings_button_rect = pygame.Rect(WIDTH / 2 - button_width / 2, settings_y, button_width, button_height)
-        start_button_rect = pygame.Rect(WIDTH / 2 - button_width / 2, start_y, button_width, button_height)
-        quit_button_rect = pygame.Rect(WIDTH / 2 - button_width / 2, quit_y, button_width, button_height)
+        settings_button_rect = pygame.Rect(LAUNCHER_WIDTH / 2 - button_width / 2, settings_y, button_width, button_height)
+        start_button_rect = pygame.Rect(LAUNCHER_WIDTH / 2 - button_width / 2, start_y, button_width, button_height)
+        quit_button_rect = pygame.Rect(LAUNCHER_WIDTH / 2 - button_width / 2, quit_y, button_width, button_height)
 
         buttons = [
             {"text": "Settings", "rect": settings_button_rect, "action": "settings"},
@@ -145,7 +146,7 @@ def main_menu(screen, clock, font, small_font):
                 for button in buttons:
                     if button["rect"].collidepoint(event.pos):
                         if button["action"] == "settings":
-                            new_volume, status = settings_menu(screen, clock, WIDTH, HEIGHT, pygame.mixer.music.get_volume())
+                            new_volume, status = settings_menu(screen, clock, LAUNCHER_WIDTH, LAUNCHER_HEIGHT, pygame.mixer.music.get_volume())
                             if status == 'quit': return 'quit'
                         else:
                             return button["action"]
@@ -215,7 +216,7 @@ def reveal_cells(board, x, y, grid_size):
                 if dx != 0 or dy != 0:
                     reveal_cells(board, x + dx, y + dy, grid_size)
 
-def draw_end_message(screen, font, message, color, current_level):
+def draw_end_message(screen, font, message, color, current_level, win=False):
     """
     Draws the end game message (win or lose).
 
@@ -225,6 +226,7 @@ def draw_end_message(screen, font, message, color, current_level):
         message (str): The message to display.
         color (tuple): The color of the message text.
         current_level (int): The current game level.
+        win (bool): Whether the game was won.
     """
     # UI Colors.
     BACKGROUND_COLOR = (10, 30, 10)
@@ -233,26 +235,28 @@ def draw_end_message(screen, font, message, color, current_level):
     BUTTON_HOVER_COLOR = (80, 80, 80)
     BORDER_COLOR = (150, 150, 150)
 
+    current_width = screen.get_width()
+    current_height = screen.get_height()
+
     # Create a semi-transparent overlay.
-    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay = pygame.Surface((current_width, current_height), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 180))
     screen.blit(overlay, (0, 0))
 
     # Draw the message.
-    title_font = pygame.font.Font(None, 60)
-    draw_text(message, title_font, color, screen, WIDTH / 2, HEIGHT / 2 - 50)
+    draw_text(message, font, color, screen, current_width / 2, current_height / 2 - 50)
 
     # Draw Restart and Quit buttons.
-    button_font = pygame.font.Font(None, 40)
+    button_font = pygame.font.Font(None, 30)
     button_width = 250
     button_height = 60
     button_spacing = 20
 
-    restart_y = HEIGHT / 2 + 20
+    restart_y = current_height / 2 + 20
     quit_y = restart_y + button_height + button_spacing
 
-    restart_button_rect = pygame.Rect(WIDTH / 2 - button_width / 2, restart_y, button_width, button_height)
-    quit_button_rect = pygame.Rect(WIDTH / 2 - button_width / 2, quit_y, button_width, button_height)
+    restart_button_rect = pygame.Rect(current_width / 2 - button_width / 2, restart_y, button_width, button_height)
+    quit_button_rect = pygame.Rect(current_width / 2 - button_width / 2, quit_y, button_width, button_height)
 
     mx, my = pygame.mouse.get_pos()
 
@@ -260,7 +264,8 @@ def draw_end_message(screen, font, message, color, current_level):
     current_button_color = BUTTON_HOVER_COLOR if restart_button_rect.collidepoint(mx, my) else BUTTON_COLOR
     pygame.draw.rect(screen, current_button_color, restart_button_rect, border_radius=10)
     pygame.draw.rect(screen, BORDER_COLOR, restart_button_rect, 2, border_radius=10)
-    draw_text("Restart (R)", button_font, TEXT_COLOR, screen, restart_button_rect.centerx, restart_button_rect.centery)
+    button_text = "Next Level (R)" if win else "Restart (R)"
+    draw_text(button_text, button_font, TEXT_COLOR, screen, restart_button_rect.centerx, restart_button_rect.centery)
 
     # Draw Quit button with hover effect.
     current_button_color = BUTTON_HOVER_COLOR if quit_button_rect.collidepoint(mx, my) else BUTTON_COLOR
@@ -361,9 +366,9 @@ def game_loop(screen, clock, font, cell_font, level):
 
         # Display end game messages.
         if game_over:
-            draw_end_message(screen, font, "GAME OVER! R to restart, Q to quit.", RED, level)
+            draw_end_message(screen, font, "GAME OVER!", RED, level)
         elif game_won:
-            draw_end_message(screen, font, "YOU WIN! R to restart, Q to quit.", (0, 255, 0), level)
+            draw_end_message(screen, font, "YOU WIN!", (0, 255, 0), level, win=True)
 
         pygame.display.flip()
         clock.tick(30)
@@ -465,6 +470,7 @@ def run_game(screen, clock):
         screen (pygame.Surface): The main screen surface.
         clock (pygame.time.Clock): The Pygame clock object.
     """
+    from config import LAUNCHER_WIDTH, LAUNCHER_HEIGHT
     pygame.display.set_caption("Minesweeper")
     # Fonts for menus and the game.
     font = pygame.font.Font(None, 74)
@@ -473,8 +479,10 @@ def run_game(screen, clock):
 
     # Main state machine loop.
     while True:
+        screen = pygame.display.set_mode((LAUNCHER_WIDTH, LAUNCHER_HEIGHT))
         menu_choice = main_menu(screen, clock, font, small_font)
         if menu_choice == 'quit':
+            screen = pygame.display.set_mode((LAUNCHER_WIDTH, LAUNCHER_HEIGHT))
             return 0
 
         current_level = 1
@@ -490,9 +498,34 @@ def run_game(screen, clock):
                     break
                 else:
                     # Display level complete message
-                    end_choice = draw_end_message(screen, font, f"Level {current_level - 1} Complete!", (0, 255, 0), current_level)
-                    if end_choice == 'quit':
-                        game_outcome = 'quit'
+                    while True:
+                        end_choice = draw_end_message(screen, font, f"Level {current_level - 1} Complete!", (0, 255, 0), current_level, win=True)
+                        pygame.display.flip()
+                        # Wait for user input
+                        event = pygame.event.wait()
+                        if event.type == pygame.QUIT:
+                            game_outcome = 'quit'
+                            break
+                        if event.type == pygame.KEYDOWN:
+                            if event.key == pygame.K_r:
+                                break  # Continue to next level
+                            if event.key == pygame.K_q:
+                                game_outcome = 'quit'
+                                break
+                        if event.type == pygame.MOUSEBUTTONDOWN:
+                            mx, my = event.pos
+                            current_width = screen.get_width()
+                            current_height = screen.get_height()
+                            # Check if next level button was clicked
+                            next_level_button_rect = pygame.Rect(current_width / 2 - 125, current_height / 2 + 20, 250, 60)
+                            if next_level_button_rect.collidepoint(mx, my):
+                                break # Continue to next level
+                            # Check if quit button was clicked
+                            quit_button_rect = pygame.Rect(current_width / 2 - 125, current_height / 2 + 80, 250, 60)
+                            if quit_button_rect.collidepoint(mx, my):
+                                game_outcome = 'quit'
+                                break
+                    if game_outcome == 'quit':
                         break
             elif outcome == 'game_over':
                 game_outcome = 'game_over'
