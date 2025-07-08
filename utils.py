@@ -277,7 +277,7 @@ def settings_menu(screen, clock, game_width, game_height, initial_volume):
             if event.type == pygame.MOUSEMOTION and dragging_handle:
                 current_volume = (event.pos[0] - slider_x) / slider_width
                 current_volume = max(0.0, min(1.0, current_volume))
-                pygame.mixer.music.set_volume(_volume)
+                pygame.mixer.music.set_volume(current_volume)
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return current_volume, 'resume'

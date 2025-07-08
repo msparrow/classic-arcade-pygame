@@ -31,6 +31,7 @@ import frogger
 import galaga
 import cyber_ninja
 import beat_em_up
+import tic_tac_toe
 
 # --- Initialization ---
 # Initialize all imported Pygame modules.
@@ -59,6 +60,7 @@ GAMES = {
     "Tetris": tetris_game,
     "Frogger": frogger,
     "Galaga": galaga,
+    "Tic Tac Toe": tic_tac_toe,
 }
 
 def show_high_scores(screen, clock):
