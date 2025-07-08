@@ -21,7 +21,7 @@ from utils import draw_text, pause_menu, settings_menu
 import scores
 
 # --- Game Constants ---
-SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
+SCREEN_WIDTH, SCREEN_HEIGHT = 1000, 750
 PLAYER_ACC = 0.5
 PLAYER_FRICTION = -0.12
 PLAYER_GRAVITY = 0.64

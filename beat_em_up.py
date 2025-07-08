@@ -20,6 +20,9 @@ FIGHTER_SPEED = 8
 JUMP_POWER = -20
 PUNCH_DAMAGE, KICK_DAMAGE = 10, 15
 PUNCH_REACH, KICK_REACH = 60, 80
+PUNCH_SPRITE_WIDTH = FIGHTER_WIDTH + 30
+KICK_SPRITE_WIDTH = FIGHTER_WIDTH + 40
+
 
 # --- Asset Creation ---
 def create_fighter_surface(color1, color2):
@@ -32,6 +35,33 @@ def create_fighter_surface(color1, color2):
     # Legs
     pygame.draw.rect(surface, color2, (10, 70, 10, 50))
     pygame.draw.rect(surface, color2, (30, 70, 10, 50))
+    return surface
+
+def create_punching_surface(color1, color2):
+    """Creates a surface of the fighter punching."""
+    surface = pygame.Surface((PUNCH_SPRITE_WIDTH, FIGHTER_HEIGHT), pygame.SRCALPHA)
+    # Head
+    pygame.draw.rect(surface, color2, (15, 0, 20, 20))
+    # Body
+    pygame.draw.rect(surface, color1, (10, 20, 30, 50))
+    # Legs
+    pygame.draw.rect(surface, color2, (10, 70, 10, 50))
+    pygame.draw.rect(surface, color2, (30, 70, 10, 50))
+    # Punching Arm
+    pygame.draw.rect(surface, color1, (40, 30, 30, 15))
+    return surface
+
+def create_kicking_surface(color1, color2):
+    """Creates a surface of the fighter kicking."""
+    surface = pygame.Surface((KICK_SPRITE_WIDTH, FIGHTER_HEIGHT), pygame.SRCALPHA)
+     # Head
+    pygame.draw.rect(surface, color2, (15, 0, 20, 20))
+    # Body
+    pygame.draw.rect(surface, color1, (10, 20, 30, 50))
+    # Standing Leg
+    pygame.draw.rect(surface, color2, (10, 70, 10, 50))
+    # Kicking Leg
+    pygame.draw.rect(surface, color2, (20, 70, 50, 20))
     return surface
 
 def create_snowy_mountain_bg():
@@ -49,19 +79,29 @@ def create_snowy_mountain_bg():
 
 class Assets:
     def __init__(self):
-        self.fighter1 = create_fighter_surface((200, 0, 0), (150, 0, 0)) # Red
-        self.fighter2 = create_fighter_surface((0, 0, 200), (0, 0, 150)) # Blue
+        # Player 1 (Red)
+        p1_color1, p1_color2 = (200, 0, 0), (150, 0, 0)
+        self.fighter1 = create_fighter_surface(p1_color1, p1_color2)
+        self.fighter1_punch = create_punching_surface(p1_color1, p1_color2)
+        self.fighter1_kick = create_kicking_surface(p1_color1, p1_color2)
+
+        # Player 2 (Blue)
+        p2_color1, p2_color2 = (0, 0, 200), (0, 0, 150)
+        self.fighter2 = create_fighter_surface(p2_color1, p2_color2)
+        self.fighter2_punch = create_punching_surface(p2_color1, p2_color2)
+        self.fighter2_kick = create_kicking_surface(p2_color1, p2_color2)
+        
         self.background = create_snowy_mountain_bg()
 
 assets = Assets()
 
 # --- Fighter Class ---
 class Fighter:
-    def __init__(self, x, y, image, controls, facing_left):
+    def __init__(self, x, y, images, controls, facing_left):
         self.rect = pygame.Rect(x, y, FIGHTER_WIDTH, FIGHTER_HEIGHT)
         self.vel_y = 0
         self.health = 100
-        self.image = image
+        self.images = images
         self.controls = controls
         self.facing_left = facing_left
         self.is_jumping = False
@@ -145,39 +185,49 @@ class Fighter:
             target.hit = True
 
     def draw(self, surface):
-        img = pygame.transform.flip(self.image, self.facing_left, False)
-        surface.blit(img, self.rect)
-
-        # Draw attack animation
+        current_image = self.images['idle']
+        extra_width = 0
         if self.is_attacking:
-            limb_color = (200, 150, 100) # Skin color for limbs
             if self.attack_type == 'punch':
-                if self.facing_left:
-                    punch_rect = pygame.Rect(self.rect.left - 30, self.rect.top + 30, 30, 15)
-                else:
-                    punch_rect = pygame.Rect(self.rect.right, self.rect.top + 30, 30, 15)
-                pygame.draw.rect(surface, limb_color, punch_rect)
+                current_image = self.images['punch']
+                extra_width = PUNCH_SPRITE_WIDTH - FIGHTER_WIDTH
             elif self.attack_type == 'kick':
-                if self.facing_left:
-                    kick_rect = pygame.Rect(self.rect.left - 50, self.rect.top + 70, 50, 20)
-                else:
-                    kick_rect = pygame.Rect(self.rect.right, self.rect.top + 70, 50, 20)
-                pygame.draw.rect(surface, limb_color, kick_rect)
+                current_image = self.images['kick']
+                extra_width = KICK_SPRITE_WIDTH - FIGHTER_WIDTH
+
+        img = pygame.transform.flip(current_image, self.facing_left, False)
+        
+        blit_pos = self.rect.topleft
+        if self.is_attacking and self.facing_left:
+            blit_pos = (self.rect.left - extra_width, self.rect.top)
+            
+        surface.blit(img, blit_pos)
 
 # --- Main Game Functions ---
 def run_game(screen, clock):
     """Main function to manage the game states for Beat 'em Up."""
-    fighter1 = Fighter(200, 300, assets.fighter1, {
+    fighter1_images = {
+        'idle': assets.fighter1,
+        'punch': assets.fighter1_punch,
+        'kick': assets.fighter1_kick
+    }
+    fighter1 = Fighter(200, 300, fighter1_images, {
         'left': pygame.K_a, 'right': pygame.K_d, 'jump': pygame.K_w,
         'punch': pygame.K_f, 'kick': pygame.K_g
     }, facing_left=False)
     
-    fighter2 = Fighter(500, 300, assets.fighter2, {
+    fighter2_images = {
+        'idle': assets.fighter2,
+        'punch': assets.fighter2_punch,
+        'kick': assets.fighter2_kick
+    }
+    fighter2 = Fighter(500, 300, fighter2_images, {
         'left': pygame.K_LEFT, 'right': pygame.K_RIGHT, 'jump': pygame.K_UP,
         'punch': pygame.K_k, 'kick': pygame.K_l
     }, facing_left=True)
 
     font = pygame.font.Font(None, 40)
+    small_font = pygame.font.Font(None, 24)
     game_over = False
 
     while not game_over:
@@ -192,11 +242,19 @@ def run_game(screen, clock):
         # --- Drawing ---
         screen.blit(assets.background, (0, 0))
         
-        # Health bars
-        pygame.draw.rect(screen, RED, (20, 20, 300, 30))
-        pygame.draw.rect(screen, GREEN, (20, 20, fighter1.health * 3, 30))
-        pygame.draw.rect(screen, RED, (SCREEN_WIDTH - 320, 20, 300, 30))
-        pygame.draw.rect(screen, GREEN, (SCREEN_WIDTH - 320, 20, fighter2.health * 3, 30))
+        # Health bars & Player Info
+        # Player 1
+        draw_text("Player 1", font, WHITE, screen, 170, 15)
+        pygame.draw.rect(screen, RED, (20, 40, 300, 30))
+        pygame.draw.rect(screen, GREEN, (20, 40, fighter1.health * 3, 30))
+        draw_text("Controls: WASD, F: Punch, G: Kick", small_font, WHITE, screen, 170, 80)
+
+        # Player 2
+        draw_text("Player 2", font, WHITE, screen, SCREEN_WIDTH - 170, 15)
+        pygame.draw.rect(screen, RED, (SCREEN_WIDTH - 320, 40, 300, 30))
+        pygame.draw.rect(screen, GREEN, (SCREEN_WIDTH - 320, 40, fighter2.health * 3, 30))
+        draw_text("Controls: Arrows, K: Punch, L: Kick", small_font, WHITE, screen, SCREEN_WIDTH - 170, 80)
+
 
         fighter1.draw(screen)
         fighter2.draw(screen)
