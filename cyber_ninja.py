@@ -25,7 +25,7 @@ SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 PLAYER_ACC = 0.5
 PLAYER_FRICTION = -0.12
 PLAYER_GRAVITY = 0.64
-PLAYER_JUMP = -18
+PLAYER_JUMP = -6
 PLAYER_HEALTH = 100
 ENEMY_HEALTH = 50
 
@@ -112,7 +112,7 @@ ENEMY_PROJECTILE_DATA = [
 # Using a simple class to hold the created surfaces
 class Assets:
     def __init__(self):
-        self.player = create_surface_from_data(PLAYER_SPRITE_DATA)
+        self.player = create_surface_from_data(PLAYER_SPRITE_DATA, scale=6)
         self.walking_bot = create_surface_from_data(WALKING_BOT_DATA, scale=12)
         self.turret = create_surface_from_data(TURRET_DATA, scale=12)
         self.platform_tile = create_surface_from_data(PLATFORM_TILE_DATA, scale=20) # Tiles are larger
@@ -217,53 +217,57 @@ class Enemy(pygame.sprite.Sprite):
         # Disappear on first hit
         self.kill()
 
-class WalkingBot(Enemy):
+class FlyingBot(Enemy):
     def __init__(self, pos):
         super().__init__(pos, assets.walking_bot)
-        self.vel = vec(random.choice([-4, 4]), 0)
+        self.vel = vec(random.uniform(-1, 1), random.uniform(-1, 1))
+        self.last_shot = pygame.time.get_ticks()
+        self.direction_change_timer = pygame.time.get_ticks()
+
+    def update(self, player, all_sprites, enemy_projectiles):
+        now = pygame.time.get_ticks()
+        if now - self.direction_change_timer > random.randint(1500, 3500):
+            self.direction_change_timer = now
+            self.vel = vec(random.uniform(-1, 1), random.uniform(-1, 1))
+
+        self.pos += self.vel
+        self.rect.center = self.pos
+
+        dist_to_player = self.pos.distance_to(player.pos)
+        if dist_to_player < 400:
+            if now - self.last_shot > 1200:
+                self.last_shot = now
+                direction = (player.pos - self.pos).normalize()
+                proj = EnemyProjectile(self.rect.center, direction, self)
+                all_sprites.add(proj)
+                enemy_projectiles.add(proj)
+
+class WalkingBot(Enemy):
+    def __init__(self, pos):
+        super().__init__(pos, assets.turret)
+        self.vel = vec(random.choice([-2, 2]), 0)
         self.last_shot = 0
         self.direction_timer = 0
 
     def update(self, platforms, player, all_sprites, enemy_projectiles):
         self.pos += self.vel
         self.rect.midbottom = self.pos
-        # Simple patrol: reverse direction at edges or walls
+
         self.rect.y += 1
         platform_hits = pygame.sprite.spritecollide(self, platforms, False)
         self.rect.y -= 1
         
         now = pygame.time.get_ticks()
-        if not platform_hits or now - self.direction_timer > 2000:
+        if not platform_hits or now - self.direction_timer > 3000:
             self.vel.x *= -1
             self.direction_timer = now
 
-        # Shooting logic
         dist_to_player = self.pos.distance_to(player.pos)
-        if dist_to_player < 350:
-            is_facing_player = (player.pos.x > self.pos.x and self.vel.x > 0) or \
-                               (player.pos.x < self.pos.x and self.vel.x < 0)
-            if is_facing_player:
-                if now - self.last_shot > 1000:
-                    self.last_shot = now
-                    direction = (player.pos - self.pos).normalize()
-                    proj = EnemyProjectile(self.rect.center, direction)
-                    all_sprites.add(proj)
-                    enemy_projectiles.add(proj)
-
-class Turret(Enemy):
-    def __init__(self, pos):
-        super().__init__(pos, assets.turret)
-        self.last_shot = 0
-
-    def update(self, player, all_sprites, enemy_projectiles):
-        # Fire at player if within range
-        dist = self.pos.distance_to(player.pos)
-        if dist < 300:
-            now = pygame.time.get_ticks()
-            if now - self.last_shot > 1500: # Cooldown
+        if dist_to_player < 300:
+            if now - self.last_shot > 1500:
                 self.last_shot = now
                 direction = (player.pos - self.pos).normalize()
-                proj = EnemyProjectile(self.rect.center, direction)
+                proj = EnemyProjectile(self.rect.center, direction, self)
                 all_sprites.add(proj)
                 enemy_projectiles.add(proj)
 
@@ -286,10 +290,11 @@ class Projectile(pygame.sprite.Sprite):
             self.kill()
 
 class EnemyProjectile(Projectile):
-    def __init__(self, pos, direction):
+    def __init__(self, pos, direction, owner):
         super().__init__(pos, direction)
         self.image = assets.enemy_projectile
         self.vel = direction * 7
+        self.owner = owner
 
     def update(self, camera_offset):
         super().update(camera_offset)
@@ -384,15 +389,15 @@ class WorldManager:
                 self.all_sprites.add(p)
                 self.platforms.add(p)
 
-                if random.random() < 0.2:
+                if random.random() < 0.3:
                     if random.random() < 0.5:
                         bot = WalkingBot((x, platform_y))
                         self.all_sprites.add(bot)
                         self.enemies.add(bot)
                     else:
-                        turret = Turret((x, platform_y))
-                        self.all_sprites.add(turret)
-                        self.enemies.add(turret)
+                        flying_bot = FlyingBot((x, platform_y - 100))
+                        self.all_sprites.add(flying_bot)
+                        self.enemies.add(flying_bot)
 
     def is_chunk_generated(self, chunk_x, chunk_y):
         return (chunk_x, chunk_y) in self.generated_chunks
@@ -467,7 +472,7 @@ def run_game(screen, clock):
         for enemy in enemies:
             if isinstance(enemy, WalkingBot):
                 enemy.update(platforms, player, all_sprites, enemy_projectiles)
-            elif isinstance(enemy, Turret):
+            elif isinstance(enemy, FlyingBot):
                 enemy.update(player, all_sprites, enemy_projectiles)
         
         # Update world
@@ -489,10 +494,13 @@ def run_game(screen, clock):
 
         # Enemy projectiles hitting player
         hits = pygame.sprite.spritecollide(player, enemy_projectiles, True)
-        if hits:
-            player.health -= 20
+        for hit in hits:
+            if isinstance(hit.owner, FlyingBot):
+                player.health -= 1
+            else:
+                player.health -= 20
             if player.health <= 0:
-                running = False # Game Over
+                running = False
 
         # Player colliding with enemies
         hits = pygame.sprite.spritecollide(player, enemies, False)
