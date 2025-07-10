@@ -32,6 +32,8 @@ import galaga
 import cyber_ninja
 import beat_em_up
 import tic_tac_toe
+import flappy_bird
+import angry_stones
 
 # --- Initialization ---
 # Initialize all imported Pygame modules.
@@ -48,6 +50,8 @@ TITLE_FONT_SIZE = 60
 # A dictionary mapping the display name of each game to its corresponding module.
 # This makes it easy to add or remove games from the launcher.
 GAMES = {
+    "Angry Stones": angry_stones,
+    "Flappy Bird": flappy_bird,
     "Asteroids": asteroids,
     "Beat 'em Up": beat_em_up,
     "Breakout": breakout,
@@ -278,3 +282,4 @@ def get_instructions():
     Returns a list of instructions for the launcher.
     """
     return ["Select a game from the menu."]
+    
